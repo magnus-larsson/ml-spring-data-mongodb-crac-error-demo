@@ -15,7 +15,8 @@
  */
 package com.example.data.mongodb;
 
-import com.mongodb.client.MongoClient;
+import java.util.List;
+
 import org.crac.Context;
 import org.crac.Core;
 import org.crac.Resource;
@@ -24,14 +25,23 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.event.ContextRefreshedEvent;
+import org.springframework.context.event.EventListener;
+
+import com.mongodb.client.MongoClient;
 
 @SpringBootApplication
 public class DataMongodbApplication implements Resource{
 
-  private static final Logger LOG = LoggerFactory.getLogger(DataMongodbApplication.class);
+  	private static final Logger LOG = LoggerFactory.getLogger(DataMongodbApplication.class);
+
+	private static final int VERSION = 1;
 
 	@Autowired
 	private MongoClient mongoClient;
+
+	@Autowired
+	private AuthorRepository authorRepository;
 
 	public static void main(String[] args) throws InterruptedException {
 		SpringApplication.run(DataMongodbApplication.class, args);
@@ -41,18 +51,32 @@ public class DataMongodbApplication implements Resource{
 		Core.getGlobalContext().register(this);
 	  }
 
-	@Override
+	@EventListener(ContextRefreshedEvent.class)
+	public void initIndicesAfterStartup() {
+		LOG.info("### V{}: Spring Context refreshed...", VERSION);
+		insertTestdata();
+	}
+  
+    @Override
 	public void beforeCheckpoint(Context<? extends Resource> context) {
-	  LOG.info("### V3: CRaC's beforeCheckpoint callback method called...");
+	  LOG.info("### V{}: CRaC's beforeCheckpoint callback method called...", VERSION);
 	  LOG.info("### - Shutting down the MongoClient...");
 	  mongoClient.close();
-	  LOG.info("- MongoClient closed.");
+	  LOG.info("### - MongoClient closed.");
 	}
   
 	@Override
 	public void afterRestore(Context<? extends Resource> context) {
-	  LOG.info("### V3: CRaC's afterRestore callback method called...");
-  //    LOG.info("### MongoDb: " + mongodDbHost + ":" + mongodDbPort);
+	  LOG.info("### V{}: CRaC's afterRestore callback method called...", VERSION);
+	  // insertTestdata();
+	}
+
+	private void insertTestdata() {
+		LOG.info("### - Inserting some testdata in MongoDb...");
+		authorRepository.saveAll(List.of(
+		  new Author("id-1", "Brandon Sanderson"),
+		  new Author("id-2", "Brent Weeks"),
+		  new Author("id-3", "Peter V. Brett")));
 	}
   
 }

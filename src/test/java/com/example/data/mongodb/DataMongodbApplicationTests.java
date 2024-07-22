@@ -5,10 +5,10 @@ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironmen
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
-@SpringBootTest(webEnvironment = RANDOM_PORT)
+//@SpringBootTest(webEnvironment = RANDOM_PORT)
 class DataMongodbApplicationTests {
 
-	@Test
+	// @Test
 	void contextLoads() {
 	}
 

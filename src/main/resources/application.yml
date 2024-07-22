@@ -1,5 +1,12 @@
-spring.data.mongodb.host=${MONGO_HOST:localhost}
-spring.data.mongodb.port=${MONGO_PORT_27017:27017}
+# spring.data.mongodb.host=${MONGO_HOST:localhost}
+# spring.data.mongodb.port=${MONGO_PORT_27017:27017}
+
+spring.data.mongodb:
+  host: localhost
+  port: 27017
+  
+---
+spring.config.activate.on-profile: crac
 
 spring:
   cloud:
@@ -11,3 +18,5 @@ spring:
     #   - com.mongodb.connection.ServerDescription
   application:
     name: data-mongodb-test
+  config:
+    import: file:./runtime-configuration.yml
