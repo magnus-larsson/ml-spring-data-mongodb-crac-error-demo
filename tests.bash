@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 set -e
-set -x
+# set -x
 
 function testCurlCmd() {
   if $@; then return 0; else return 1; fi

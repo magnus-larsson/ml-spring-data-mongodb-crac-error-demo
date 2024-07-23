@@ -1,8 +1,26 @@
-This project can reproduce problems by using RestTemplate and RestClient during warmup before creating a CRaC checkpoint using the `jcmd myapp.jar JDK.checkpoint` command.
+This project can be used to reproduce problems with `spring-data-mongodb` when MongoDB is accessed during warmup before creating a CRaC checkpoint.
+The checkpoint command will be aborted due to an open socket, used for the connection to MongoDB, with an error message like:
 
-The project consists of a Spring Boot app that provides three HTTP endpoints. These endpoints use a RestTemplate, RestClient, and WebClient bean to send HTTP requests to `https://httpbin.org/uuid`. 
+```
+An exception during a checkpoint operation:
+jdk.internal.crac.mirror.CheckpointException
+        Suppressed: jdk.internal.crac.mirror.impl.CheckpointOpenSocketException: Socket[addr=localhost/127.0.0.1,port=27017,localport=54228]
+```
 
-To reproduce the problem in a Linux environment, clone the project from GitHub and run the test script `tests.bash`. The test script calls all three endpoints during the warmup, i.e., before the `jcmd myapp.jar JDK.checkpoint` command is executed.
+This problem can be mitigated by closing the Mongo Client before the checkpoint using CRaC's callback method `beforeCheckpoint`.
+To restart the Mongo Client after a restore from a CRaC checkpoint, `spring-cloud-refresh` can be used.
+
+Unfortunately, new configuration parameters for the MongoDB connection are not picked up when restarted from a CRaC checkpoint.
+
+The project consists of a Spring Boot app that provides a HTTP endpoint for getting data from a MongoDB database.
+The project is configured to use an external configuration file, `runtime-configuration.yml`. It can be used to override the default configuration values in the file `src/main/resources/application.yml`. The project provides external configuration files, one empty that is used during development, and one that points to another MongoDB database to be used when run in production. Its configuration looks like:
+
+	spring.data.mongodb:
+	host: mongodb
+	port: 27017
+	database: prod-db
+
+To reproduce the problems and its mitigations in a Linux environment, clone the project from GitHub and run the test script `tests.bash` to create a checkpoint. The test script calls the HTTP endpoint a couple of time during the warmup, i.e., before the `jcmd myapp.jar JDK.checkpoint` command is executed.
 
 First ensure that a Java 21 JDK with CRaC support is used, e.g. by running a command like:
 
@@ -10,81 +28,59 @@ First ensure that a Java 21 JDK with CRaC support is used, e.g. by running a com
 sdk use java 21.0.2.crac-zulu
 ```
 
-Commands to reproduce the problem:
+Commands to get the source code and create a checkpoint:
 
 ```
-git clone https://github.com/magnus-larsson/ml-spring-http-client-crac-error-demo.git
-cd ml-spring-http-client-crac-error-demo
+git clone https://github.com/magnus-larsson/ml-spring-data-mongodb-crac-error-demo.git
+cd ml-spring-data-mongodb-crac-error-demo
 
+cp runtime-configuration-dev.yml runtime-configuration.yml
 ./tests.bash
 ```
 
-This will result in open socket related errors like:
+> **Note**: The external configuration files for development, `runtime-configuration-dev.yml`, is used when the checkpoint is created.
+
+The tests-script shall end with the log message:
+
+	CR: Checkpoint ...
+
+...and the folder `checkpoint` has been created.
+
+
+The Spring Boot app can now be restareted from the checkpoint with the commands:
 
 ```
-An exception during a checkpoint operation:
-jdk.internal.crac.mirror.CheckpointException
-	Suppressed: java.nio.channels.IllegalSelectorException
-		at java.base/sun.nio.ch.EPollSelectorImpl.beforeCheckpoint(EPollSelectorImpl.java:401)
-		at java.base/jdk.internal.crac.mirror.impl.AbstractContext.invokeBeforeCheckpoint(AbstractContext.java:43)
-		at java.base/jdk.internal.crac.mirror.impl.AbstractContext.beforeCheckpoint(AbstractContext.java:58)
-		at java.base/jdk.internal.crac.mirror.impl.BlockingOrderedContext.beforeCheckpoint(BlockingOrderedContext.java:64)
-		at java.base/jdk.internal.crac.mirror.impl.AbstractContext.invokeBeforeCheckpoint(AbstractContext.java:43)
-		at java.base/jdk.internal.crac.mirror.impl.AbstractContext.beforeCheckpoint(AbstractContext.java:58)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore1(Core.java:153)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore(Core.java:286)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestoreInternal(Core.java:299)
-	Suppressed: jdk.internal.crac.mirror.impl.CheckpointOpenSocketException: java.nio.channels.SocketChannel[connected local=/10.211.55.4:50404 remote=httpbin.org/18.214.17.35:443]
-		at java.base/jdk.internal.crac.JDKSocketResourceBase.lambda$beforeCheckpoint$0(JDKSocketResourceBase.java:68)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore1(Core.java:169)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore(Core.java:286)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestoreInternal(Core.java:299)
-	Suppressed: jdk.internal.crac.mirror.impl.CheckpointOpenSocketException: Socket[addr=httpbin.org/18.214.17.35,port=443,localport=50394]
-		at java.base/jdk.internal.crac.JDKSocketResourceBase.lambda$beforeCheckpoint$0(JDKSocketResourceBase.java:68)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore1(Core.java:169)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore(Core.java:286)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestoreInternal(Core.java:299)
-	Suppressed: jdk.internal.crac.mirror.impl.CheckpointOpenResourceException: FD fd=9 type=unknown path=anon_inode:[eventpoll]
-		at java.base/jdk.internal.crac.mirror.Core.translateJVMExceptions(Core.java:117)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore1(Core.java:188)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore(Core.java:286)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestoreInternal(Core.java:299)
-	Suppressed: jdk.internal.crac.mirror.impl.CheckpointOpenResourceException: FD fd=10 type=unknown path=anon_inode:[eventfd]
-		at java.base/jdk.internal.crac.mirror.Core.translateJVMExceptions(Core.java:117)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore1(Core.java:188)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestore(Core.java:286)
-		at java.base/jdk.internal.crac.mirror.Core.checkpointRestoreInternal(Core.java:299)
+cp runtime-configuration-prod.yml runtime-configuration.yml
+java -XX:CRaCRestoreFrom=checkpoint
 ```
 
-To avoid these errors, remove the following calls to the RestTemplate and RestClient endpoints in `tests.bash`:
+> **Note**: The external configuration files for production, `runtime-configuration-prod.yml`, is used when the app is restarted from the checkpoint.
 
-```
-curl localhost:8080/usingRestTemplate
-curl localhost:8080/usingRestClient
-```
+Note from the log output that `spring-cloud-refresh` detects the updated configuration of the MongoDB database (i.e. the properties `spring.data.mongodb.database` and `spring.data.mongodb.host`):
 
-> **Note:** The WebClient endpoint can still be used during the warmup.
+	2024-07-23T11:49:10.555+02:00  INFO 674800 --- [data-mongodb-test] [Attach Listener] o.s.c.c.refresh.RefreshScopeLifecycle    : Refreshing context on restart.
+	2024-07-23T11:49:10.835+02:00  INFO 674800 --- [data-mongodb-test] [Attach Listener] o.s.c.c.refresh.RefreshScopeLifecycle    : Refreshed keys: [spring.data.mongodb.database, spring.data.mongodb.host]
 
-Now, rerun the test script to create a checkpoint. The Spring Boot application can be restored from the checkpoint, and the endpoints can be called successfully. Run the following commands to verify:
-
-run the app from checkpoint:
-
-```
-java -XX:CRaCRestoreFrom=checkpoint || reset
-```
-
-Run tests in a separate terminal:
+In a separate terminal, call the app's health endpoint and get some data from the MongoDB database to verify the app:
 
 ```
 curl localhost:8080/actuator/health
-
 curl localhost:8080/getAuthor/id-1
 curl localhost:8080/getAuthor/id-2
 curl localhost:8080/getAuthor/id-3
 ```
 
-Kill the app:
+Note how the app connects to the MongoDB database, but uses the default connection string `localhost:27017`, ignoring the new hostname `mongodb`, specified in the external configuration file
+
+	2024-07-23T11:51:58.169+02:00  INFO 674800 --- [data-mongodb-test] [localhost:27017] org.mongodb.driver.cluster               : Monitor thread successfully connected to server with description ServerDescription{address=localhost:27017, type=STANDALONE, state=CONNECTED, ok=true, minWireVersion=0, maxWireVersion=17, maxDocumentSize=16777216, logicalSessionTimeoutMinutes=30, roundTripTimeNanos=2169377}
+
+
+So, the mongo client is successfully restarted after the restart from a checkpoint, but the new configuration s ignored.
+
+Wrap up stopping the Spring Boot app with the command:
 
 ```
 kill $(jcmd | grep build/libs/demo-0.0.1-SNAPSHOT.jar | awk '{print $1}')
 ```
+
+> **Note**: When the app is restarted from a checkpoint it does not react on `CTRL/C`, so it has to be stopped using the `kill` command.

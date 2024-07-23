@@ -14,8 +14,6 @@ spring:
       never-refreshable:
       extra-refreshable:
       - com.mongodb.client.MongoClient
-    #   - com.mongodb.connection.ClusterDescription
-    #   - com.mongodb.connection.ServerDescription
   application:
     name: data-mongodb-test
   config:
